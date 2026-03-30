@@ -763,6 +763,17 @@ void RADIO_SetupRegisters(bool switchToForeground)
 
     if (gRxVfo->Modulation == MODULATION_AM)
         BK4819_SetFilterBandwidth(BK4819_FILTER_BW_AM, true);
+#ifdef ENABLE_MOD_DIG
+    else if (gRxVfo->Modulation == MODULATION_DIG)
+    {
+        // Remap standard bandwidth to digital-specific values with flat filter response.
+        BK4819_SetFilterBandwidth(
+            (Bandwidth == BK4819_FILTER_BW_NARROW)
+                ? BK4819_FILTER_BW_DIGITAL_NARROW
+                : BK4819_FILTER_BW_DIGITAL_WIDE,
+            false);
+    }
+#endif
     else
     {
         switch (Bandwidth)
@@ -1107,7 +1118,7 @@ void RADIO_SetModulation(ModulationMode_t modulation)
     // DIG mode: flat audio passthrough for external TNC (M17/digital modes).
     if (modulation == MODULATION_DIG) {
         BK4819_EnterDigital();
-        BK4819_SetRegValue(afDacGainRegSpec, 0xF);
+        BK4819_SetRegValue(afDacGainRegSpec, 0x8);  // Matches fagci-digital; 0xF causes clipping
         BK4819_WriteRegister(BK4819_REG_3D, 0x2AAB);
         RADIO_SetupAGC(false, false);
         return;

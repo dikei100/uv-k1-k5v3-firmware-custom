@@ -688,6 +688,29 @@ void BK4819_SetFilterBandwidth(const BK4819_FilterBandwidth_t Bandwidth, const b
             val = 0x345C;
             break;
 
+#ifdef ENABLE_MOD_DIG
+        case BK4819_FILTER_BW_DIGITAL_WIDE:
+            // 0x47A8: RF 7.5kHz, weak-RF 6kHz, AF Tx LPF2 4.5kHz bypassed,
+            //         25kHz mode. Optimized for digital passthrough.
+            val = 0x47A8;
+            // Also disable speech/sub-audio filters for flat digital response.
+            BK4819_WriteRegister(BK4819_REG_7E,
+                BK4819_ReadRegister(BK4819_REG_7E) & 0xFFC0);  // Clear bits [5:0]
+            BK4819_WriteRegister(BK4819_REG_2B,
+                (BK4819_ReadRegister(BK4819_REG_2B) & 0xF8F8) | 0x0707);
+            break;
+
+        case BK4819_FILTER_BW_DIGITAL_NARROW:
+            // 0x7800: RF 4.5kHz, weak-RF 3.75kHz, AF Tx LPF2 3kHz bypassed,
+            //         12.5kHz mode. Optimized for digital passthrough.
+            val = 0x7800;
+            BK4819_WriteRegister(BK4819_REG_7E,
+                BK4819_ReadRegister(BK4819_REG_7E) & 0xFFC0);
+            BK4819_WriteRegister(BK4819_REG_2B,
+                (BK4819_ReadRegister(BK4819_REG_2B) & 0xF8F8) | 0x0707);
+            break;
+#endif
+
         default:
             val = 0x5C;
             break;
@@ -1166,6 +1189,8 @@ void BK4819_EnterRaw(void)
 
 #ifdef ENABLE_MOD_DIG
 static uint16_t gSavedReg7D;
+static uint16_t gSavedReg7E;
+static bool     gDigitalTxActive;
 static bool     gMicBiasInitDone;
 
 void BK4819_EnterDigital(void)
@@ -1189,8 +1214,10 @@ void BK4819_EnterDigital(void)
     BK4819_SetRegValue(afcDisableRegSpec, false);
 
     // Initialize MIC bias once for DC stability when DC filter is disabled.
+    // Use read-modify-write to preserve other REG_30 peripheral enables.
     if (!gMicBiasInitDone) {
-        BK4819_WriteRegister(BK4819_REG_30, 4); // Enable MIC ADC
+        uint16_t reg30 = BK4819_ReadRegister(BK4819_REG_30);
+        BK4819_WriteRegister(BK4819_REG_30, reg30 | (1u << 2)); // Enable MIC ADC (bit 2)
         SYSTEM_DelayMs(250);                     // Wait for bias settling with 1uF cap
         gMicBiasInitDone = true;
     }
@@ -1198,30 +1225,41 @@ void BK4819_EnterDigital(void)
 
 void BK4819_DigitalTxSetup(void)
 {
-    // Save MIC sensitivity register for later restoration.
-    gSavedReg7D = BK4819_ReadRegister(BK4819_REG_7D);
+    // Guard against double-call without cleanup (would lose original saved values).
+    if (!gDigitalTxActive) {
+        gSavedReg7D = BK4819_ReadRegister(BK4819_REG_7D);
+        gSavedReg7E = BK4819_ReadRegister(BK4819_REG_7E);
+        gDigitalTxActive = true;
+    }
 
     // Flat MIC sensitivity, AGC disabled.
     BK4819_WriteRegister(BK4819_REG_7D, 0xE940);
 
-    // Disable TX DC filter and speech shaping filters.
+    // Disable TX DC filter and sub-audio filters.
     // REG_7E bit 15: TX DC filter disable
-    // REG_7E bits [5:0]: clear to disable HPF300, LPF3K, pre-emphasis
-    uint16_t reg7e = BK4819_ReadRegister(BK4819_REG_7E);
-    reg7e |= (1u << 15);           // Disable TX DC filter
-    reg7e &= ~0x3Fu;               // Clear bits [5:0] -- disable speech filters
-    BK4819_WriteRegister(BK4819_REG_7E, reg7e);
+    // REG_7E bits [5:3]: clear sub-audio filter bits (matches fagci-digital mask 0xFFC7)
+    // Note: bits [2:0] are left untouched -- they may have other functions.
+    BK4819_WriteRegister(BK4819_REG_7E,
+        (BK4819_ReadRegister(BK4819_REG_7E) & 0xFFC7) | 0x8000);
 
-    // Ensure TX AF filters are disabled via REG_2B.
-    uint16_t reg2b = BK4819_ReadRegister(BK4819_REG_2B);
-    reg2b |= (1u << 2) | (1u << 1) | (1u << 0);
-    BK4819_WriteRegister(BK4819_REG_2B, reg2b);
+    // Disable TX AF filters via REG_2B bits [2:0].
+    // PrepareTransmit -> ExitBypass clears these, so we must re-apply them.
+    BK4819_WriteRegister(BK4819_REG_2B,
+        (BK4819_ReadRegister(BK4819_REG_2B) & 0xFFF8) | 0x7);
 }
 
 void BK4819_DigitalTxCleanup(void)
 {
-    // Restore MIC sensitivity register.
-    BK4819_WriteRegister(BK4819_REG_7D, gSavedReg7D);
+    if (gDigitalTxActive) {
+        // Restore MIC sensitivity and TX filter registers.
+        BK4819_WriteRegister(BK4819_REG_7D, gSavedReg7D);
+        BK4819_WriteRegister(BK4819_REG_7E, gSavedReg7E);
+        gDigitalTxActive = false;
+    }
+
+    // Re-enter digital RX mode: restore RX filter bypasses that were
+    // cleared by ExitBypass during PrepareTransmit.
+    BK4819_EnterDigital();
 }
 #endif
 
