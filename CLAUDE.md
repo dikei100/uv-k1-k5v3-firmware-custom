@@ -87,6 +87,23 @@ To add a new feature flag:
 
 **Settings persistence**: 4-bit modulation stored in upper nibble of EEPROM byte. Unknown values fall back to FM on load (`settings.c`).
 
+## Digital Mode (ENABLE_MOD_DIG)
+
+TNC passthrough mode for M17 4-FSK via external Mobilinkd TNC4. The BK4819 is configured as a flat baseband I/O interface — no on-device codec.
+
+**Key registers (bk4829.c):**
+- REG_2B: bits 10,9,8 (RX filter bypass), bits 2,1,0 (TX filter bypass)
+- REG_7E: bit 15 (TX DC filter), bits [5:3] (sub-audio filters) — only clear [5:3], NOT [2:0]
+- REG_7D: 0xE940 (flat MIC sensitivity during TX, saved/restored)
+- REG_43: digital bandwidth values — 0x47A8 (wide), 0x7800 (narrow) via `BK4819_FILTER_BW_DIGITAL_WIDE/NARROW`
+- REG_30: MIC ADC (bit 2) for DC bias stability — use read-modify-write, NOT raw write
+
+**TX flow hazard:** `BK4819_PrepareTransmit()` calls `ExitBypass()` which clears REG_2B filter bypasses. `DigitalTxSetup()` must re-apply TX filter bits after PrepareTransmit. `DigitalTxCleanup()` must call `BK4819_EnterDigital()` to re-apply RX bypasses.
+
+**Reference implementations:** [mobilinkd/uv-k5-firmware-custom](https://github.com/mobilinkd/uv-k5-firmware-custom) (digital-modulation branch), [dikei100/fagci-digital](https://github.com/dikei100/fagci-digital).
+
+**Hardware mod required:** C77→1µF, R69→1µF, C31+20µF, C71→0Ω, plus MIC/AF/PTT taps.
+
 ## Remotes
 
 - `origin` — dikei100 fork (push target)
