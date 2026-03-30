@@ -65,6 +65,10 @@ typedef enum {
     MODULATION_RAW,
 #endif
 
+#ifdef ENABLE_MOD_DIG
+    MODULATION_DIG,
+#endif
+
     MODULATION_UKNOWN
 } ModulationMode_t;
 

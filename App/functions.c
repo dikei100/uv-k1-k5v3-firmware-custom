@@ -96,6 +96,11 @@ void FUNCTION_Foreground(const FUNCTION_Type_t PreviousFunction)
         ST7565_FixInterfGlitch();
         gVFO_RSSI_bar_level[0] = 0;
         gVFO_RSSI_bar_level[1] = 0;
+#ifdef ENABLE_MOD_DIG
+        if (gRxVfo->Modulation == MODULATION_DIG) {
+            BK4819_DigitalTxCleanup();
+        }
+#endif
     } else if (PreviousFunction != FUNCTION_RECEIVE) {
         return;
     }

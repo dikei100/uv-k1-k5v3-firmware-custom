@@ -1164,11 +1164,72 @@ void BK4819_EnterRaw(void)
 }
 #endif
 
+#ifdef ENABLE_MOD_DIG
+static uint16_t gSavedReg7D;
+static bool     gMicBiasInitDone;
+
+void BK4819_EnterDigital(void)
+{
+    // Use FM demodulator path -- provides flat passband when filters are disabled.
+    BK4819_SetAF(BK4819_AF_FM);
+
+    // Bypass all AF filters (RX + TX) for flat digital passthrough.
+    // REG_2B:
+    //  bit10: Disable AF Rx HPF300
+    //  bit 9: Disable AF Rx LPF3K
+    //  bit 8: Disable AF Rx de-emphasis
+    //  bit 2: Disable AF Tx HPF300
+    //  bit 1: Disable AF Tx LPF1
+    //  bit 0: Disable AF Tx pre-emphasis
+    uint16_t reg2b = BK4819_ReadRegister(BK4819_REG_2B);
+    reg2b |= (1u << 10) | (1u << 9) | (1u << 8) | (1u << 2) | (1u << 1) | (1u << 0);
+    BK4819_WriteRegister(BK4819_REG_2B, reg2b);
+
+    // Keep AFC enabled for digital mode (unlike BYP which disables it).
+    BK4819_SetRegValue(afcDisableRegSpec, false);
+
+    // Initialize MIC bias once for DC stability when DC filter is disabled.
+    if (!gMicBiasInitDone) {
+        BK4819_WriteRegister(BK4819_REG_30, 4); // Enable MIC ADC
+        SYSTEM_DelayMs(250);                     // Wait for bias settling with 1uF cap
+        gMicBiasInitDone = true;
+    }
+}
+
+void BK4819_DigitalTxSetup(void)
+{
+    // Save MIC sensitivity register for later restoration.
+    gSavedReg7D = BK4819_ReadRegister(BK4819_REG_7D);
+
+    // Flat MIC sensitivity, AGC disabled.
+    BK4819_WriteRegister(BK4819_REG_7D, 0xE940);
+
+    // Disable TX DC filter and speech shaping filters.
+    // REG_7E bit 15: TX DC filter disable
+    // REG_7E bits [5:0]: clear to disable HPF300, LPF3K, pre-emphasis
+    uint16_t reg7e = BK4819_ReadRegister(BK4819_REG_7E);
+    reg7e |= (1u << 15);           // Disable TX DC filter
+    reg7e &= ~0x3Fu;               // Clear bits [5:0] -- disable speech filters
+    BK4819_WriteRegister(BK4819_REG_7E, reg7e);
+
+    // Ensure TX AF filters are disabled via REG_2B.
+    uint16_t reg2b = BK4819_ReadRegister(BK4819_REG_2B);
+    reg2b |= (1u << 2) | (1u << 1) | (1u << 0);
+    BK4819_WriteRegister(BK4819_REG_2B, reg2b);
+}
+
+void BK4819_DigitalTxCleanup(void)
+{
+    // Restore MIC sensitivity register.
+    BK4819_WriteRegister(BK4819_REG_7D, gSavedReg7D);
+}
+#endif
+
 void BK4819_ExitBypass(void)
 {
     BK4819_SetAF(BK4819_AF_MUTE);
 
-#ifdef ENABLE_BYP_RAW_DEMODULATORS
+#if defined(ENABLE_BYP_RAW_DEMODULATORS) || defined(ENABLE_MOD_DIG)
     // Restore normal AF filters.
     uint16_t reg2b = BK4819_ReadRegister(BK4819_REG_2B);
     reg2b &= ~((1u << 10) | (1u << 9) | (1u << 8) | (1u << 2) | (1u << 1) | (1u << 0));

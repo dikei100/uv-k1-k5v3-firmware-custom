@@ -120,6 +120,11 @@ void     BK4819_Idle(void);
 void     BK4819_EnterBypass(void);
 void     BK4819_EnterRaw(void);
 #endif
+#ifdef ENABLE_MOD_DIG
+void     BK4819_EnterDigital(void);
+void     BK4819_DigitalTxSetup(void);
+void     BK4819_DigitalTxCleanup(void);
+#endif
 void     BK4819_ExitBypass(void);
 void     BK4819_PrepareTransmit(void);
 void     BK4819_TxOn_Beep(void);
