@@ -166,6 +166,9 @@ enable_feature(ENABLE_COPY_CHAN_TO_VFO)
 enable_feature(ENABLE_REDUCE_LOW_MID_TX_POWER)
 enable_feature(ENABLE_BYP_RAW_DEMODULATORS)
 enable_feature(ENABLE_MOD_DIG)
+enable_feature(ENABLE_CAT_CONTROL
+    app/cat.c
+)
 enable_feature(ENABLE_BLMIN_TMP_OFF)
 enable_feature(ENABLE_SCAN_RANGES)
 

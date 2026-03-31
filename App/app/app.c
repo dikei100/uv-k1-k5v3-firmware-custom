@@ -41,6 +41,10 @@
     #include "app/uart.h"
     #include "scheduler.h"
 #endif
+#ifdef ENABLE_CAT_CONTROL
+    #include "app/cat.h"
+    #include "driver/vcp.h"
+#endif
 #include "py32f0xx.h"
 #include "audio.h"
 #include "board.h"
@@ -906,10 +910,18 @@ void APP_Update(void)
 #endif
 
 #ifdef ENABLE_USB
-    if (UART_IsCommandAvailable(UART_PORT_VCP)) {
-        // SCHEDULER_Disable();
-        UART_HandleCommand(UART_PORT_VCP);
-        // SCHEDULER_Enable();
+    {
+  #ifdef ENABLE_CAT_CONTROL
+        // Peek at next VCP byte to auto-detect protocol.
+        // CAT commands start with A-Z; binary protocol starts with 0xAB.
+        extern uint16_t VCP_ReadIndex;
+        uint16_t wp = VCP_RxBufPointer;
+        if (VCP_ReadIndex != wp && CAT_IsCATByte(VCP_RxBuf[VCP_ReadIndex]))
+            CAT_ProcessVCP();
+        else
+  #endif
+        if (UART_IsCommandAvailable(UART_PORT_VCP))
+            UART_HandleCommand(UART_PORT_VCP);
     }
 #endif
 
