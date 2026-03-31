@@ -136,7 +136,9 @@ On-device APRS position beacon without external TNC.
 
 Kenwood TS-480 emulation over USB CDC (`App/app/cat.c`). Commands: FA, FB, MD, TX, RX, SM, IF, ID, PS, AG, SQ. Auto-detected by A-Z first byte.
 
-**VCP_ReadIndex:** Non-static global in `app/uart.c` (line ~187), shared via `extern` by both `cat.c` and `kiss.c` so both consume from the same VCP RX ring buffer position.
+**VCP_ReadIndex:** Non-static global defined in `app/uart.c` (line ~187), declared `extern` in `driver/vcp.h`. Shared by `cat.c`, `kiss.c`, and `app.c` so all protocol decoders consume from the same VCP RX ring buffer position.
+
+**TX safety:** CAT TX command uses `gFlagPrepareTX = true` (routed through main loop validation) instead of calling `RADIO_PrepareTX()` directly. FA/FB frequency set validates via `RX_freq_check()` before accepting.
 
 ## Remotes
 
