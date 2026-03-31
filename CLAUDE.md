@@ -104,6 +104,40 @@ TNC passthrough mode for M17 4-FSK via external Mobilinkd TNC4. The BK4819 is co
 
 **Hardware mod required:** C77→1µF, R69→1µF, C31+20µF, C71→0Ω, plus MIC/AF/PTT taps.
 
+## KISS TNC (ENABLE_KISS_TNC)
+
+KISS TNC over USB CDC — allows packet radio software (direwolf, YAAC, APRSdroid) to send AX.25 frames for AFSK transmission.
+
+**Protocol auto-detection:** First byte 0xC0 (FEND) → KISS decoder; A-Z → CAT; else binary UART.
+
+**AFSK TX engine** (`App/app/kiss.c`): Uses TIM16 at 1200 Hz to clock Bell 202 AFSK tones via BK4819 tone generator (REG_70/REG_71). Mark = 1200 Hz, Space = 2200 Hz. NRZI encoding + AX.25 bit stuffing done in TIM16 ISR. FCS (CRC-CCITT) computed and appended to frame.
+
+**TIM16 setup:** PSC=0, ARR=39999 → 48 MHz / 40000 = 1200 Hz. Enabled via `RCC->APBENR2 |= RCC_APBENR2_TIM16EN`. NVIC priority 1.
+
+**Note:** BK4819_WriteRegister is called from TIM16_IRQHandler (ISR context). Safe during TX because main loop doesn't access BK4819 for RX operations while in FUNCTION_TRANSMIT state.
+
+**Cleanup:** `AFSK_Poll()` called from main loop checks `g_afsk.done` flag set by ISR, then stops timer, disables tone generator, and calls `FUNCTION_Select(FUNCTION_FOREGROUND)`.
+
+## APRS TX Beacon (ENABLE_APRS_TX)
+
+On-device APRS position beacon without external TNC.
+
+**AX.25 frame:** Destination `APK1UV-0`, digipeater `WIDE1-1`. Info field: `!DDMM.MMN/DDDMM.MMEsymbol[comment]`.
+
+**Settings** stored at PY25Q16 physical address `0x00B000` (free sector, not in eeprom_compat.c mapping). Struct: callsign (6 chars), SSID, lat (8 chars, DDMM.MMN), lon (9 chars, DDDMM.MME), symbol table/code, comment (43 chars), beacon interval.
+
+**Auto-beacon:** `APRS_Tick500ms()` called from `APP_TimeSlice500ms()`. Intervals: off / 1 / 5 / 10 / 30 min.
+
+**Manual TX:** `ACTION_OPT_APRS_BEACON` action assignable to F1/F2/M keys via side-function menu ("APRS BEACON").
+
+**Initialization:** `APRS_Init()` called from `main.c` after `SETTINGS_LoadCalibration()`.
+
+## CAT Control (ENABLE_CAT_CONTROL)
+
+Kenwood TS-480 emulation over USB CDC (`App/app/cat.c`). Commands: FA, FB, MD, TX, RX, SM, IF, ID, PS, AG, SQ. Auto-detected by A-Z first byte.
+
+**VCP_ReadIndex:** Non-static global in `app/uart.c` (line ~187), shared via `extern` by both `cat.c` and `kiss.c` so both consume from the same VCP RX ring buffer position.
+
 ## Remotes
 
 - `origin` — dikei100 fork (push target)

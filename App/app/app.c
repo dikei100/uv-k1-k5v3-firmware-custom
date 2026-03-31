@@ -43,6 +43,16 @@
 #endif
 #ifdef ENABLE_CAT_CONTROL
     #include "app/cat.h"
+#endif
+#ifdef ENABLE_KISS_TNC
+    #include "app/kiss.h"
+#endif
+#ifdef ENABLE_APRS_TX
+    #include "app/aprs.h"
+    #include "app/kiss.h"
+#endif
+#ifdef ENABLE_USB
+    // VCP buffer access needed for protocol routing
     #include "driver/vcp.h"
 #endif
 #include "py32f0xx.h"
@@ -911,18 +921,31 @@ void APP_Update(void)
 
 #ifdef ENABLE_USB
     {
-  #ifdef ENABLE_CAT_CONTROL
-        // Peek at next VCP byte to auto-detect protocol.
-        // CAT commands start with A-Z; binary protocol starts with 0xAB.
         extern uint16_t VCP_ReadIndex;
         uint16_t wp = VCP_RxBufPointer;
-        if (VCP_ReadIndex != wp && CAT_IsCATByte(VCP_RxBuf[VCP_ReadIndex]))
-            CAT_ProcessVCP();
-        else
+        uint8_t  first = (VCP_ReadIndex != wp) ? VCP_RxBuf[VCP_ReadIndex] : 0u;
+
+  #ifdef ENABLE_KISS_TNC
+        if (KISS_IsInFrame() || first == 0xC0u) {
+            // KISS frame in progress, or new FEND-delimited frame starting
+            KISS_ProcessVCP();
+        } else
   #endif
-        if (UART_IsCommandAvailable(UART_PORT_VCP))
+  #ifdef ENABLE_CAT_CONTROL
+        if (CAT_IsCATByte(first)) {
+            // CAT commands start with A-Z
+            CAT_ProcessVCP();
+        } else
+  #endif
+        if (UART_IsCommandAvailable(UART_PORT_VCP)) {
             UART_HandleCommand(UART_PORT_VCP);
+        }
     }
+#endif
+
+#if defined(ENABLE_KISS_TNC) || defined(ENABLE_APRS_TX)
+    // Handle AFSK TX-complete cleanup (cannot be done inside ISR)
+    AFSK_Poll();
 #endif
 
 #ifdef ENABLE_FEAT_F4HWN
@@ -1589,6 +1612,10 @@ void APP_TimeSlice500ms(void)
 #endif
 
     // Skipped authentic device check
+
+#ifdef ENABLE_APRS_TX
+    APRS_Tick500ms();
+#endif
 
 #ifdef ENABLE_FMRADIO
     if (gFmRadioCountdown_500ms > 0)

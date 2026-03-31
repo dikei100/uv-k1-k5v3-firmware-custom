@@ -169,6 +169,16 @@ enable_feature(ENABLE_MOD_DIG)
 enable_feature(ENABLE_CAT_CONTROL
     app/cat.c
 )
+
+# KISS TNC and APRS TX both need the AFSK engine in kiss.c.
+# kiss.c is compiled when either feature is enabled.
+if(ENABLE_KISS_TNC OR ENABLE_APRS_TX)
+    target_sources(App INTERFACE app/kiss.c)
+endif()
+enable_feature(ENABLE_KISS_TNC)
+enable_feature(ENABLE_APRS_TX
+    app/aprs.c
+)
 enable_feature(ENABLE_BLMIN_TMP_OFF)
 enable_feature(ENABLE_SCAN_RANGES)
 

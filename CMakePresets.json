@@ -44,6 +44,8 @@
                 "ENABLE_BYP_RAW_DEMODULATORS": false,
                 "ENABLE_MOD_DIG": false,
                 "ENABLE_CAT_CONTROL": false,
+                "ENABLE_KISS_TNC": false,
+                "ENABLE_APRS_TX": false,
                 "ENABLE_BLMIN_TMP_OFF": false,
                 "ENABLE_SCAN_RANGES": true,
                 "ENABLE_REGA": false,

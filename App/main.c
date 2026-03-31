@@ -28,6 +28,9 @@
 #include "radio.h"
 #include "settings.h"
 #include "version.h"
+#ifdef ENABLE_APRS_TX
+    #include "app/aprs.h"
+#endif
 
 #ifdef ENABLE_FEAT_F4HWN
     #ifdef ENABLE_FMRADIO
@@ -106,6 +109,10 @@ void Main(void)
 
     SETTINGS_WriteBuildOptions();
     SETTINGS_LoadCalibration();
+
+#ifdef ENABLE_APRS_TX
+    APRS_Init();
+#endif
 
     RADIO_ConfigureChannel(0, VFO_CONFIGURE_RELOAD);
     RADIO_ConfigureChannel(1, VFO_CONFIGURE_RELOAD);

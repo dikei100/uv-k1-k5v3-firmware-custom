@@ -44,6 +44,9 @@
 #ifdef ENABLE_REGA
     #include "app/rega.h"
 #endif
+#ifdef ENABLE_APRS_TX
+    #include "app/aprs.h"
+#endif
 
 #if defined(ENABLE_FMRADIO)
 static void ACTION_Scan_FM(bool bRestart);
@@ -56,6 +59,10 @@ inline static void ACTION_1750() { ACTION_AlarmOr1750(true); };
 #endif
 
 inline static void ACTION_ScanRestart() { ACTION_Scan(true); };
+
+#ifdef ENABLE_APRS_TX
+static void ACTION_AprsTxBeacon(void) { APRS_TxBeacon(); }
+#endif
 
 void (*action_opt_table[])(void) = {
     [ACTION_OPT_NONE] = &FUNCTION_NOP,
@@ -130,6 +137,9 @@ void (*action_opt_table[])(void) = {
 #ifdef ENABLE_REGA
     [ACTION_OPT_REGA_ALARM] = &ACTION_RegaAlarm,
     [ACTION_OPT_REGA_TEST] = &ACTION_RegaTest,
+#endif
+#ifdef ENABLE_APRS_TX
+    [ACTION_OPT_APRS_BEACON] = &ACTION_AprsTxBeacon,
 #endif
 };
 
