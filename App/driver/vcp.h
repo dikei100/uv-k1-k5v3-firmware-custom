@@ -26,6 +26,7 @@
 
 extern uint8_t VCP_RxBuf[VCP_RX_BUF_SIZE];
 extern volatile uint32_t VCP_RxBufPointer;
+extern uint16_t VCP_ReadIndex;
 
 void VCP_Init();
 

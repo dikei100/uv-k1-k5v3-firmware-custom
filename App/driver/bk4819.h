@@ -49,7 +49,11 @@ enum BK4819_FilterBandwidth_t
     BK4819_FILTER_BW_WIDE = 0,
     BK4819_FILTER_BW_NARROW,
     BK4819_FILTER_BW_NARROWER,
-    BK4819_FILTER_BW_AM
+    BK4819_FILTER_BW_AM,
+#ifdef ENABLE_MOD_DIG
+    BK4819_FILTER_BW_DIGITAL_WIDE,
+    BK4819_FILTER_BW_DIGITAL_NARROW,
+#endif
 };
 
 typedef enum BK4819_FilterBandwidth_t BK4819_FilterBandwidth_t;
@@ -119,6 +123,11 @@ void     BK4819_Idle(void);
 #ifdef ENABLE_BYP_RAW_DEMODULATORS
 void     BK4819_EnterBypass(void);
 void     BK4819_EnterRaw(void);
+#endif
+#ifdef ENABLE_MOD_DIG
+void     BK4819_EnterDigital(void);
+void     BK4819_DigitalTxSetup(void);
+void     BK4819_DigitalTxCleanup(void);
 #endif
 void     BK4819_ExitBypass(void);
 void     BK4819_PrepareTransmit(void);

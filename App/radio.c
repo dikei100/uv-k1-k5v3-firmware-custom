@@ -49,7 +49,11 @@ const char gModulationStr[MODULATION_UKNOWN][4] = {
 
 #ifdef ENABLE_BYP_RAW_DEMODULATORS
     [MODULATION_BYP]="BYP",
-    [MODULATION_RAW]="RAW"
+    [MODULATION_RAW]="RAW",
+#endif
+
+#ifdef ENABLE_MOD_DIG
+    [MODULATION_DIG]="DIG",
 #endif
 };
 
@@ -759,6 +763,17 @@ void RADIO_SetupRegisters(bool switchToForeground)
 
     if (gRxVfo->Modulation == MODULATION_AM)
         BK4819_SetFilterBandwidth(BK4819_FILTER_BW_AM, true);
+#ifdef ENABLE_MOD_DIG
+    else if (gRxVfo->Modulation == MODULATION_DIG)
+    {
+        // Remap standard bandwidth to digital-specific values with flat filter response.
+        BK4819_SetFilterBandwidth(
+            (Bandwidth == BK4819_FILTER_BW_NARROW)
+                ? BK4819_FILTER_BW_DIGITAL_NARROW
+                : BK4819_FILTER_BW_DIGITAL_WIDE,
+            false);
+    }
+#endif
     else
     {
         switch (Bandwidth)
@@ -810,10 +825,18 @@ void RADIO_SetupRegisters(bool switchToForeground)
     #endif
     BK4819_SetFrequency(Frequency);
 
-    BK4819_SetupSquelch(
-        gRxVfo->SquelchOpenRSSIThresh,    gRxVfo->SquelchCloseRSSIThresh,
-        gRxVfo->SquelchOpenNoiseThresh,   gRxVfo->SquelchCloseNoiseThresh,
-        gRxVfo->SquelchCloseGlitchThresh, gRxVfo->SquelchOpenGlitchThresh);
+#ifdef ENABLE_MOD_DIG
+    if (gRxVfo->Modulation == MODULATION_DIG) {
+        // DIG mode: force squelch open -- TNC handles its own signal detection.
+        BK4819_SetupSquelch(0, 0, 0, 0, 0, 0);
+    } else
+#endif
+    {
+        BK4819_SetupSquelch(
+            gRxVfo->SquelchOpenRSSIThresh,    gRxVfo->SquelchCloseRSSIThresh,
+            gRxVfo->SquelchOpenNoiseThresh,   gRxVfo->SquelchCloseNoiseThresh,
+            gRxVfo->SquelchCloseGlitchThresh, gRxVfo->SquelchOpenGlitchThresh);
+    }
 
     BK4819_PickRXFilterPathBasedOnFrequency(Frequency);
 
@@ -923,8 +946,13 @@ void RADIO_SetupRegisters(bool switchToForeground)
     // RX expander
     BK4819_SetCompander((gRxVfo->Modulation == MODULATION_FM && gRxVfo->Compander >= 2) ? gRxVfo->Compander : 0);
 
-    BK4819_EnableDTMF();
-    InterruptMask |= BK4819_REG_3F_DTMF_5TONE_FOUND;
+#ifdef ENABLE_MOD_DIG
+    if (gRxVfo->Modulation != MODULATION_DIG)
+#endif
+    {
+        BK4819_EnableDTMF();
+        InterruptMask |= BK4819_REG_3F_DTMF_5TONE_FOUND;
+    }
 
     RADIO_SetupAGC(gRxVfo->Modulation == MODULATION_AM, false);
     //RADIO_SetupAGC(false, false);
@@ -994,9 +1022,13 @@ void RADIO_SetTxParameters(void)
         }
     #endif
 
-    AUDIO_AudioPathOff();
-
-    gEnableSpeaker = false;
+#ifdef ENABLE_MOD_DIG
+    if (gCurrentVfo->Modulation != MODULATION_DIG)
+#endif
+    {
+        AUDIO_AudioPathOff();
+        gEnableSpeaker = false;
+    }
 
     BK4819_ToggleGpioOut(BK4819_GPIO0_PIN28_RX_ENABLE, false);
 
@@ -1023,6 +1055,12 @@ void RADIO_SetTxParameters(void)
     BK4819_SetCompander((gRxVfo->Modulation == MODULATION_FM && (gRxVfo->Compander == 1 || gRxVfo->Compander >= 3)) ? gRxVfo->Compander : 0);
 
     BK4819_PrepareTransmit();
+
+#ifdef ENABLE_MOD_DIG
+    if (gCurrentVfo->Modulation == MODULATION_DIG) {
+        BK4819_DigitalTxSetup();
+    }
+#endif
 
     SYSTEM_DelayMs(10);
 
@@ -1076,8 +1114,19 @@ void RADIO_SetModulation(ModulationMode_t modulation)
     }
     #endif
 
-    #ifdef ENABLE_BYP_RAW_DEMODULATORS
-    // Ensure we always leave bypass / raw mode before applying normal modulation settings.
+    #ifdef ENABLE_MOD_DIG
+    // DIG mode: flat audio passthrough for external TNC (M17/digital modes).
+    if (modulation == MODULATION_DIG) {
+        BK4819_EnterDigital();
+        BK4819_SetRegValue(afDacGainRegSpec, 0x8);  // Matches fagci-digital; 0xF causes clipping
+        BK4819_WriteRegister(BK4819_REG_3D, 0x2AAB);
+        RADIO_SetupAGC(false, false);
+        return;
+    }
+    #endif
+
+    #if defined(ENABLE_BYP_RAW_DEMODULATORS) || defined(ENABLE_MOD_DIG)
+    // Ensure we always leave bypass / raw / digital mode before applying normal modulation settings.
     BK4819_ExitBypass();
     #endif
 
@@ -1248,7 +1297,11 @@ void RADIO_PrepareTX(void)
     }
 #endif
 #ifndef ENABLE_TX_WHEN_AM
-    else if (gCurrentVfo->Modulation != MODULATION_FM) {
+    else if (gCurrentVfo->Modulation != MODULATION_FM
+  #ifdef ENABLE_MOD_DIG
+             && gCurrentVfo->Modulation != MODULATION_DIG
+  #endif
+    ) {
         // not allowed to TX if in AM mode
         State = VFO_STATE_TX_DISABLE;
     }

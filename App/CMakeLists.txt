@@ -165,6 +165,20 @@ enable_feature(ENABLE_FEAT_F4HWN_AUDIO_SCOPE)
 enable_feature(ENABLE_COPY_CHAN_TO_VFO)
 enable_feature(ENABLE_REDUCE_LOW_MID_TX_POWER)
 enable_feature(ENABLE_BYP_RAW_DEMODULATORS)
+enable_feature(ENABLE_MOD_DIG)
+enable_feature(ENABLE_CAT_CONTROL
+    app/cat.c
+)
+
+# KISS TNC and APRS TX both need the AFSK engine in kiss.c.
+# kiss.c is compiled when either feature is enabled.
+if(ENABLE_KISS_TNC OR ENABLE_APRS_TX)
+    target_sources(App INTERFACE app/kiss.c)
+endif()
+enable_feature(ENABLE_KISS_TNC)
+enable_feature(ENABLE_APRS_TX
+    app/aprs.c
+)
 enable_feature(ENABLE_BLMIN_TMP_OFF)
 enable_feature(ENABLE_SCAN_RANGES)
 
