@@ -22,6 +22,7 @@
 #include "driver/bk4819.h"
 #include "radio.h"
 #include "settings.h"
+#include "frequencies.h"
 #include "functions.h"
 #include "misc.h"
 #include <stdio.h>
@@ -32,9 +33,7 @@
 static uint8_t  gCAT_Buf[CAT_BUF_SIZE];
 static uint8_t  gCAT_BufLen;
 
-// VCP_ReadIndex is defined in uart.c — shared so CAT and binary protocols
-// consume from the same position in the VCP RX buffer.
-extern uint16_t VCP_ReadIndex;
+// VCP_ReadIndex is defined in uart.c, declared in driver/vcp.h.
 
 bool CAT_IsCATByte(uint8_t byte)
 {
@@ -98,7 +97,7 @@ static uint32_t CAT_ParseFreq(const char *str)
 // Handle a complete CAT command (without trailing ';').
 static void CAT_HandleCommand(const char *cmd, uint8_t len)
 {
-    char reply[48];
+    char reply[64];
 
     if (len < 2)
         return;
@@ -123,12 +122,12 @@ static void CAT_HandleCommand(const char *cmd, uint8_t len)
             // Read
             char freq[12];
             CAT_FormatFreq(freq, gEeprom.VfoInfo[0].freq_config_RX.Frequency);
-            sprintf(reply,"FA%s;", freq);
+            sprintf(reply, "FA%s;", freq);
             CAT_Send(reply);
         } else if (len >= 13) {
-            // Set
+            // Set — validate against band table
             uint32_t f = CAT_ParseFreq(cmd + 2);
-            if (f > 0) {
+            if (f > 0 && RX_freq_check(f) >= 0) {
                 gEeprom.VfoInfo[0].freq_config_RX.Frequency = f;
                 gRequestSaveChannel = 1;
                 gUpdateDisplay = true;
@@ -142,11 +141,11 @@ static void CAT_HandleCommand(const char *cmd, uint8_t len)
         if (len == 2) {
             char freq[12];
             CAT_FormatFreq(freq, gEeprom.VfoInfo[1].freq_config_RX.Frequency);
-            sprintf(reply,"FB%s;", freq);
+            sprintf(reply, "FB%s;", freq);
             CAT_Send(reply);
         } else if (len >= 13) {
             uint32_t f = CAT_ParseFreq(cmd + 2);
-            if (f > 0) {
+            if (f > 0 && RX_freq_check(f) >= 0) {
                 gEeprom.VfoInfo[1].freq_config_RX.Frequency = f;
                 gRequestSaveChannel = 1;
                 gUpdateDisplay = true;
@@ -161,7 +160,7 @@ static void CAT_HandleCommand(const char *cmd, uint8_t len)
             uint8_t kmod = CAT_ModToKenwood(gRxVfo->Modulation);
             sprintf(reply,"MD%u;", kmod);
             CAT_Send(reply);
-        } else if (len >= 3) {
+        } else if (len >= 3 && cmd[2] >= '0' && cmd[2] <= '9') {
             uint8_t kmod = cmd[2] - '0';
             ModulationMode_t mod = CAT_KenwoodToMod(kmod);
             gRxVfo->Modulation = mod;
@@ -173,8 +172,8 @@ static void CAT_HandleCommand(const char *cmd, uint8_t len)
 
     // TX — Transmit (TX0; = MIC, TX1; = data)
     if (cmd[0] == 'T' && cmd[1] == 'X') {
-        if (gCurrentFunction != FUNCTION_TRANSMIT) {
-            RADIO_PrepareTX();
+        if (gCurrentFunction != FUNCTION_TRANSMIT && !gSerialConfigCountDown_500ms) {
+            gFlagPrepareTX = true;
         }
         CAT_Send("TX0;");
         return;
@@ -192,10 +191,10 @@ static void CAT_HandleCommand(const char *cmd, uint8_t len)
     // SM — S-meter reading (0-30 scale)
     if (cmd[0] == 'S' && cmd[1] == 'M') {
         if (len == 2 || (len >= 3 && cmd[2] == '0')) {
-            uint16_t rssi = BK4819_ReadRegister(0x67);
+            uint16_t rssi = BK4819_ReadRegister(BK4819_REG_67) & 0x01FFu;
             // Scale RSSI (0-511) to Kenwood S-meter (0000-0030)
-            uint16_t smeter = (rssi > 240) ? 30 : (rssi * 30 / 240);
-            sprintf(reply,"SM0%04u;", smeter);
+            uint16_t smeter = (rssi > 240u) ? 30u : (rssi * 30u / 240u);
+            sprintf(reply, "SM0%04u;", smeter);
             CAT_Send(reply);
         }
         return;
@@ -235,15 +234,16 @@ static void CAT_HandleCommand(const char *cmd, uint8_t len)
         CAT_FormatFreq(freq, gRxVfo->pRX->Frequency);
         uint8_t kmod = CAT_ModToKenwood(gRxVfo->Modulation);
         uint8_t tx = (gCurrentFunction == FUNCTION_TRANSMIT) ? 1 : 0;
-        // IF response: freq(11) + step(4) + rit/xit(6) + flags + mode + ...
-        sprintf(reply, sizeof(reply),
+        // IF response: IF + freq(11) + step(4) + rit(6) + flags + mode + ...
+        // Total: 2 + 11 + 4 + 6 + 1+1+2+1+1+1+1+1+1+2+1 + 1 = ~36 chars + NUL
+        sprintf(reply,
             "IF%s"       // P1: frequency (11 digits)
-            "    "       // P2: freq step (4 spaces = not used)
+            "    "       // P2: freq step (4 spaces)
             "+00000"     // P3: RIT/XIT offset
             "0"          // P4: RIT off
             "0"          // P5: XIT off
             "00"         // P6: memory channel
-            "0"          // P7: RX/TX (0=RX)
+            "%u"         // P7: RX/TX status
             "%u"         // P8: mode
             "0"          // P9: FR/FT
             "0"          // P10: scan
@@ -252,9 +252,7 @@ static void CAT_HandleCommand(const char *cmd, uint8_t len)
             "00"         // P13: tone number
             "0"          // P14: shift
             ";",
-            freq, kmod);
-        // Override TX status
-        reply[28] = '0' + tx;
+            freq, tx, kmod);
         CAT_Send(reply);
         return;
     }

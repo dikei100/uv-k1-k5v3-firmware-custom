@@ -921,7 +921,6 @@ void APP_Update(void)
 
 #ifdef ENABLE_USB
     {
-        extern uint16_t VCP_ReadIndex;
         uint16_t wp = VCP_RxBufPointer;
         uint8_t  first = (VCP_ReadIndex != wp) ? VCP_RxBuf[VCP_ReadIndex] : 0u;
 

@@ -174,6 +174,9 @@ bool AFSK_TxFrame(const uint8_t *frame, uint16_t len)
         return false;
     if (len == 0u || len > AFSK_MAX_FRAME)
         return false;
+    // Don't start AFSK if radio is already transmitting (e.g., voice PTT held)
+    if (gCurrentFunction == FUNCTION_TRANSMIT)
+        return false;
 
     // Copy frame and compute + append FCS
     memcpy(g_afsk.frame, frame, len);
@@ -356,9 +359,7 @@ static struct {
     uint16_t     len;
 } g_kiss;
 
-// VCP_ReadIndex is owned by uart.c; made non-static so KISS and CAT
-// can share the same read pointer into the VCP RX ring buffer.
-extern uint16_t VCP_ReadIndex;
+// VCP_ReadIndex is defined in uart.c, declared in driver/vcp.h.
 
 bool KISS_IsInFrame(void)
 {
@@ -417,6 +418,11 @@ bool KISS_ProcessVCP(void)
             case KISS_ESCAPE:
                 if (b == KISS_TFEND)       b = KISS_FEND;
                 else if (b == KISS_TFESC)  b = KISS_FESC;
+                else {
+                    // Unknown escape — drop per KISS spec
+                    g_kiss.state = KISS_IN_DATA;
+                    break;
+                }
                 if (g_kiss.len < KISS_MAX_FRAME)
                     g_kiss.frame[g_kiss.len++] = b;
                 g_kiss.state = KISS_IN_DATA;

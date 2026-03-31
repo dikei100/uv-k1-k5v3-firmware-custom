@@ -84,9 +84,7 @@ void APRS_SaveConfig(void)
 
 bool APRS_IsDefault(void)
 {
-    return (gAprsConfig.callsign[0] == 'N' &&
-            gAprsConfig.callsign[1] == 'O' &&
-            gAprsConfig.callsign[2] == 'C');
+    return memcmp(gAprsConfig.callsign, "NOCALL", 6) == 0;
 }
 
 // ----------------------------------------------------------------
