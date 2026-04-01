@@ -85,7 +85,13 @@ To add a new feature flag:
 
 **TX flow**: `RADIO_PrepareTX()` → `FUNCTION_Select(FUNCTION_TRANSMIT)` → `RADIO_SetTxParameters()`. TX is gated by `ENABLE_TX_WHEN_AM` for non-FM modes.
 
+**RADIO_SetModulation() structure** (`radio.c`): BYP/RAW/DIG modes early-return before the main switch. The main switch (FM/AM/USB) configures REG_31, REG_42, REG_2A, REG_2B, REG_2F plus audio profile registers (REG_54/REG_55). `ENABLE_FEAT_F4HWN_AUDIO` provides per-modulation audio profiles: `AUDIO_ApplyFMProfile()` (5 presets), `AUDIO_ApplyAMProfile()` (3 presets), `AUDIO_ApplyUSBProfile()`. Audio settings split into `gSetting_set_audio_fm` and `gSetting_set_audio_am`, packed into one EEPROM byte (FM in low nibble, AM in high nibble).
+
+**Feature flag guards**: When referencing globals that are conditionally compiled (e.g., `gFmRadioMode` under `ENABLE_FMRADIO`), always wrap with matching `#ifdef`. The upstream sometimes omits these guards, causing build failures in presets where the feature is disabled.
+
 **Settings persistence**: 4-bit modulation stored in upper nibble of EEPROM byte. Unknown values fall back to FM on load (`settings.c`).
+
+**printf convention**: The codebase uses a lightweight printf library (`App/external/printf/printf.h`) which defines `sprintf` → `sprintf_` via macro. Never `#include <stdio.h>` — it pulls in newlib's `sprintf` which requires `_sbrk` (heap). Always use `#include "external/printf/printf.h"` instead.
 
 ## Digital Mode (ENABLE_MOD_DIG)
 

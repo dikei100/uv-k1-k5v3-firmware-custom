@@ -25,7 +25,7 @@
 #include "frequencies.h"
 #include "functions.h"
 #include "misc.h"
-#include <stdio.h>
+#include "external/printf/printf.h"
 #include <string.h>
 
 #define CAT_BUF_SIZE 64
