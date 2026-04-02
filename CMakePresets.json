@@ -195,6 +195,10 @@
                 "ENABLE_FEAT_F4HWN_VOL": true,
                 "ENABLE_FEAT_F4HWN_AUDIO": true,
                 "ENABLE_FEAT_F4HWN_AUDIO_SCOPE": true,
+                "ENABLE_MOD_DIG": true,
+                "ENABLE_CAT_CONTROL": true,
+                "ENABLE_KISS_TNC": true,
+                "ENABLE_APRS_TX": true,
                 "ENABLE_SWD": true,
                 "EDITION_STRING": "Fusion",
                 "TARGET": "f4hwn.fusion"

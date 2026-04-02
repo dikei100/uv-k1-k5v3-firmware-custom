@@ -146,6 +146,19 @@ Kenwood TS-480 emulation over USB CDC (`App/app/cat.c`). Commands: FA, FB, MD, T
 
 **TX safety:** CAT TX command uses `gFlagPrepareTX = true` (routed through main loop validation) instead of calling `RADIO_PrepareTX()` directly. FA/FB frequency set validates via `RX_freq_check()` before accepting.
 
+## CHIRP Module
+
+`f4hwn.fusion.chirp.v5.3.1.py` — CHIRP radio programming software driver, based on upstream's release but extended for our custom features. Shipped alongside the firmware binary in GitHub releases.
+
+**Key data structures:**
+- `KEYACTIONS_LIST` — side-key action names, indices must match `ACTION_OPT_t` enum in `App/settings.h`
+- `MODUL_TO_MODE` / `MODE_TO_MODUL` — bidirectional mapping between BK4819 modulation+bandwidth fields and CHIRP mode strings
+- `rf.valid_modes` — `["FM", "NFM", "AM", "NAM", "USB", "DIG"]`
+
+**Modulation encoding:** EEPROM stores 4-bit modulation (FM=0, AM=1, USB=2, DIG=3) and 1-bit bandwidth (wide=0, narrow=1). FM/AM use both variants (FM/NFM, AM/NAM). USB and DIG ignore the bandwidth bit.
+
+**When adding new features:** If a new `ACTION_OPT_*` enum value or modulation mode is added to the firmware, the CHIRP module must be updated to match (key actions list, mode mappings).
+
 ## Remotes
 
 - `origin` — dikei100 fork (push target)
